@@ -5,7 +5,7 @@ namespace App\Controller;
 use App\Entity\User;
 use App\Form\UserForgottenPasswordType;
 use App\Form\UserLoginType;
-use App\Form\UserRegisterType;
+use App\Form\UserType;
 use App\Form\UserResetPasswordType;
 use App\Security\LoginFormAuthenticator;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -14,6 +14,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Security\Core\Encoder\UserPasswordEncoderInterface;
+use Symfony\Component\Security\Core\Exception\CustomUserMessageAuthenticationException;
 use Symfony\Component\Security\Csrf\TokenGenerator\TokenGeneratorInterface;
 use Symfony\Component\Security\Guard\GuardAuthenticatorHandler;
 use Symfony\Component\Security\Http\Authentication\AuthenticationUtils;
@@ -69,7 +70,9 @@ class SecurityController extends AbstractController
     ): Response
     {
         $user = new User();
-        $form = $this->createForm(UserRegisterType::class, $user);
+        $form = $this->createForm(UserType::class, $user, [
+            'validation_groups' => array('User', 'registration'),
+        ]);
 
         $form->handleRequest($request);
         if ($form->isSubmitted() && $form->isValid()) {
@@ -124,13 +127,14 @@ class SecurityController extends AbstractController
             /* @var $user User */
 
             if ($user === null) {
-                $this->addFlash('danger', 'Email Inconnu');
-                return $this->redirectToRoute('app_homepage');
+                throw new CustomUserMessageAuthenticationException('Email could not be found.');
             }
+
             $token = $tokenGenerator->generateToken();
 
             try {
                 $user->setResetToken($token);
+                $user->setPasswordRequestedAt(new \Datetime());
                 $entityManager->flush();
             } catch (\Exception $e) {
                 $this->addFlash('warning', $e->getMessage());
@@ -168,37 +172,35 @@ class SecurityController extends AbstractController
     public function resetPassword(Request $request, string $token, UserPasswordEncoderInterface $passwordEncoder)
     {
 
-        $form = $this->createForm(UserResetPasswordType::class);
+        $entityManager = $this->getDoctrine()->getManager();
+        $user = $entityManager->getRepository(User::class)->findOneByResetToken($token);
+        /* @var $user User */
+        if ($user === null) {
+            throw new CustomUserMessageAuthenticationException('Email could not be found.');
+        }
+
+        $form = $this->createForm(UserResetPasswordType::class, $user);
 
         $form->handleRequest($request);
         if ($form->isSubmitted() && $form->isValid()) {
-            $entityManager = $this->getDoctrine()->getManager();
-
-            $user = $entityManager->getRepository(User::class)->findOneByResetToken($token);
-            /* @var $user User */
-
-            if ($user === null) {
-                $this->addFlash('danger', 'Token Inconnu');
-                return $this->redirectToRoute('app_homepage');
-            }
 
             $user->setResetToken(null);
-            $data = $form->getData();
-            $user->setPassword($passwordEncoder->encodePassword($user, $data['plainPassword']));
+            $user->setPasswordRequestedAt(null);
+            $password = $passwordEncoder->encodePassword($user, $user->getPlainPassword());
+            $user->setPassword($password);
             $entityManager->flush();
 
             $this->addFlash('notice', 'Mot de passe mis à jour');
 
             return $this->redirectToRoute('app_homepage');
-        }else {
-
-            return $this->render(
-                'security/reset_password.html.twig',
-                [
-                    'token' => $token,
-                    'form' => $form->createView()
-                ]);
         }
+
+        return $this->render(
+            'security/reset_password.html.twig',
+            [
+                'token' => $token,
+                'form' => $form->createView()
+            ]);
 
     }
 

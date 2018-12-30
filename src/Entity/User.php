@@ -44,14 +44,26 @@ class User implements UserInterface
     private $password;
 
     /**
+     * @ORM\Column(type="datetime", nullable=true)
+     * @var \DateTime
+     */
+    private $passwordRequestedAt;
+
+    /**
      * @var string le token qui servira lors de l'oubli de mot de passe
      * @ORM\Column(type="string", length=255, nullable=true)
      */
     protected $resetToken;
 
+    /**
+     * @ORM\Column(name="is_active", type="boolean")
+     */
+    private $isActive;
+
     public function __construct()
     {
         $this->roles = array('ROLE_USER');
+        $this->isActive = true;
     }
 
     public function getId(): ?int
@@ -78,7 +90,7 @@ class User implements UserInterface
      */
     public function getUsername(): string
     {
-        return (string) $this->email;
+        return (string)$this->email;
     }
 
     /**
@@ -137,6 +149,23 @@ class User implements UserInterface
         // $this->plainPassword = null;
     }
 
+    /*
+     * Get passwordRequestedAt
+     */
+    public function getPasswordRequestedAt(): \DateTime
+    {
+        return $this->passwordRequestedAt;
+    }
+
+    /*
+     * Set passwordRequestedAt
+     */
+    public function setPasswordRequestedAt($passwordRequestedAt)
+    {
+        $this->passwordRequestedAt = $passwordRequestedAt;
+        return $this;
+    }
+
     /**
      * @return string
      */
@@ -151,6 +180,23 @@ class User implements UserInterface
     public function setResetToken(?string $resetToken): void
     {
         $this->resetToken = $resetToken;
+    }
+
+    /*
+     * Get isActive
+     */
+    public function getIsActive(): bool
+    {
+        return $this->isActive;
+    }
+
+    /*
+     * Set isActive
+     */
+    public function setIsActive($isActive)
+    {
+        $this->isActive = $isActive;
+        return $this;
     }
 
 }
